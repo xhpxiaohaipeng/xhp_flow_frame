@@ -116,13 +116,13 @@ def train(model,train_data,epoch = 4000,learning_rate = 0.0128):
     accuracies_valid = []
     loss_min = np.inf
     graph_sort_class = toplogical_sort(model.feed_dict)  # 拓扑排序
+    update_lr = Auto_update_lr(lr=learning_rate,alpha=0.1, patiences=200, print_=True)
     for e in range(epoch):
         for X,Y in train_data:
             X,Y = X.unsqueeze(1).numpy(),Y.numpy()
             model.x.value = X
             model.y.value = Y
             run_steps(graph_sort_class)
-            update_lr = Auto_update_lr(np.mean(losses),alpha=0.1, lr=learning_rate, patiences=2, print_=False)
             learning_rate = update_lr.lr
             optimize(graph_sort_class,learning_rate=learning_rate)
             Visual_gradient(model)
@@ -140,6 +140,7 @@ def train(model,train_data,epoch = 4000,learning_rate = 0.0128):
             accuracy_valid = model.cross_loss.accuracy
             losses_valid.append(loss_valid)
             accuracies_valid.append(accuracy_valid*100)
+        update_lr.updata(np.mean(losses_valid))
         print("epoch:{}/{},train loss:{:.8f},train accuracy:{:.6f}%,valid loss:{:.8f},valid accuracy:{:.6f}%".
               format(e,epoch,np.mean(losses),np.mean(accuracies),np.mean(losses_valid),np.mean(accuracies_valid)))
         if np.mean(losses_valid) < loss_min:
@@ -150,9 +151,9 @@ def train(model,train_data,epoch = 4000,learning_rate = 0.0128):
     plt.plot(losses)
     plt.savefig("image/lstm_class_loss.png")
     plt.show()
-lstm_class = LSTM_classfy(4,64,3)
+lstm_class = LSTM_classfy(4,16,3)
 load_model('model/lstm_class.xhp',lstm_class)
-train(lstm_class,train_loader,50000,0.0000128)
+train(lstm_class,train_loader,50000,0.00128)
 
 
 def predict(x,model):
@@ -170,7 +171,7 @@ load_model('model/lstm_class.xhp',lstm_class)
 classs = predict(input_x[0][None,None,:],lstm_class)
 print(classs,y[0])
 
-def test(test_loader,model):
+def evaluator(test_loader,model):
     graph = toplogical_sort(model.feed_dict)
     accuracies = []
     losses = []
@@ -185,4 +186,4 @@ def test(test_loader,model):
         accuracies.append(accuracy_test)
     print("test loss:{},test accuracy:{}".format(np.mean(losses),np.mean(accuracies)))
 
-test(test_loader,lstm_class)
+evaluator(test_loader,lstm_class)

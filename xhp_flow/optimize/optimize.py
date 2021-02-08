@@ -152,27 +152,37 @@ class optimize():
 
 
 class Auto_update_lr():
-    def __init__(self,optimizer,loss,lr,alpha = 0.1,patiences = 200,print_ = False):
+    def __init__(self,lr,alpha = 0.1,patiences = 200,print_ = False):
 
-        self.loss = loss
-        self.lr = lr
+
         self.patiences = patiences
         self.print = print_
         self.alpha = alpha
-
-        self.patience = 0
+        self.lr = lr
         self.loss_min = np.inf
+
+    def updata(self,loss):
+
+        self.loss = loss
 
         if self.loss < self.loss_min:
             self.loss_min = self.loss
+            self.patience = 0
 
         if self.loss > self.loss_min:
             self.patience += 1
+        else:
+            self.patience = 0
+
+        """
+        只要连续paiences次损失不下降就更新梯度
+        """
         if self.patience > self.patiences:
             self.lr *= self.alpha
+            self.patience = 0
 
-        if self.print:
-            print('lr:',self.lr)
+            if self.print:
+                print('lr:', self.lr)
 
 
 

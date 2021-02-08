@@ -639,3 +639,17 @@ class LSTM(Node):
             self.gradients[self.bc] += gradients_from_loss_to_self*gradients_bc
             self.gradients[self.bo] += gradients_from_loss_to_self*gradients_bo
 
+
+class CNN(Node):
+    """
+     for i in range(H_out):
+        for j in range(W_out):
+            #跳stride
+            x_padded_mask = x_pad[:, :, i * stride:i * stride + HH, j *
+                                  stride:j * stride + WW]  #(:, :, HH, WW)
+            for k in range(F):
+                #卷积
+                out[:, k, i, j] = np.sum(
+                    x_padded_mask * w[k, :, :, :], axis=(1, 2, 3))
+    """
+    pass

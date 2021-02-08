@@ -1,7 +1,7 @@
 
 import os
 from xhp_flow.nn.node import Placeholder,Linear,Sigmoid,ReLu,Leakrelu,Elu,Tanh,LSTM
-from xhp_flow.optimize.optimize import toplogical_sort,run_steps,optimize,forward,save_model,load_model,Auto_update_lr
+from xhp_flow.optimize.optimize import toplogical_sort,run_steps,optimize,forward,save_model,load_model,Auto_update_lr,Grad_Clipping_Disappearance
 from xhp_flow.loss.loss import MSE,EntropyCrossLossWithSoftmax
 import matplotlib.pyplot as plt
 
@@ -130,7 +130,7 @@ def train(model, train_data, epoch=4000, learning_rate=0.00128):
             accuracies_valid.append(accuracy_valid)
         print("epoch:{}/{},train loss:{:.8f},train accuracy:{:.8f},valid loss:"\
             "{:.8f},valid accuracy:{:.8f}".format(e,epoch,np.mean(losses),
-        np.mean(accuracies), np.mean(losses_valid),np.mean( accuracies_valid)))
+        np.mean(accuracies), np.mean(losses_valid),np.mean(accuracies_valid)))
         if np.mean(losses_valid) < loss_min:
             print('loss is {:.6f}, is decreasing!! save moddel'.format(np.mean(losses_valid)))
             save_model("model/mlp_class.xhp", model)
@@ -151,7 +151,7 @@ def predict(x,model):
 
 
 
-def test(test_loader,model):
+def evaluator(test_loader,model):
     graph = toplogical_sort(model.feed_dict)
     accuracies = []
     losses = []
@@ -167,10 +167,10 @@ def test(test_loader,model):
     print("test loss:{},test accuracy:{}".format(np.mean(losses),np.mean(accuracies)))
 
 load_model('model/mlp_class.xhp',mlp_class)
-#train(mlp_class, train_loader, 50000)
+train(mlp_class, train_loader, 50000)
 x1,y = next(iter(train_loader))
 input_x,y = x1.numpy(),y.numpy()
 load_model('model/mlp_class.xhp',mlp_class)
 classs = predict(input_x[0][None,:],mlp_class)
 print(classs,y[0])
-test(test_loader,mlp_class)
+evaluator(test_loader,mlp_class)
