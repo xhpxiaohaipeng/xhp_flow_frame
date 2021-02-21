@@ -2,8 +2,19 @@ from sklearn.datasets import load_boston
 from tqdm import tqdm
 from sklearn.utils import shuffle, resample
 import numpy as np
+
 from xhp_flow.nn.node import Placeholder,Linear,Sigmoid,ReLu,Leakrelu,Elu,Tanh,LSTM
-from xhp_flow.optimize.optimize import toplogical_sort,run_steps,optimize,forward,save_model,load_model
+from xhp_flow.optimize.optimize import toplogical_sort,run_steps,forward,save_model,load_model,Auto_update_lr,Visual_gradient,Grad_Clipping_Disappearance,SUW,\
+SGD,\
+Momentum,\
+Adagrad,\
+RMSProp,\
+AdaDelta,\
+Adam,\
+AdaMax,\
+Nadam,\
+NadaMax
+
 from xhp_flow.loss.loss import MSE,EntropyCrossLossWithSoftmax
 import matplotlib.pyplot as plt
 
@@ -57,7 +68,7 @@ class MLP():
 
 batch_size = 64
 mlp = MLP(x_, y_)
-graph_sort = toplogical_sort(mlp.feed_dict)  # 拓扑排序
+
 m = x_.shape[0]
 steps_per_epoch = m // batch_size
 
@@ -66,6 +77,9 @@ def train(model, epoch=1000, learning_rate=1e-3, steps_per_epoch=steps_per_epoch
     # 开始训练
     losses = []
     loss_min = np.inf
+    graph_sort = toplogical_sort(model.feed_dict)  # 拓扑排序
+    optim = Nadam(graph_sort)
+    update_lr = Auto_update_lr(lr=learning_rate, alpha=0.1, patiences=500, print_=True)
     for e in range(epoch):
         loss = 0
         for b in range(steps_per_epoch):
@@ -76,10 +90,12 @@ def train(model, epoch=1000, learning_rate=1e-3, steps_per_epoch=steps_per_epoch
             # print(X_batch.shape)
             run_steps(graph_sort, monitor=False)
 
-            optimize(graph_sort, learning_rate=learning_rate)
+            optim.update(learning_rate=learning_rate)
+            Visual_gradient(model)
+            Grad_Clipping_Disappearance(model, 5)
 
             loss += mlp.MSE_loss.value
-
+        update_lr.updata(loss/steps_per_epoch)
         print("epoch:{}/{},loss:{:.6f}".format(e,epoch,loss / steps_per_epoch))
         losses.append(loss / steps_per_epoch)
         if loss / steps_per_epoch < loss_min:
@@ -102,6 +118,6 @@ def predict(x_rm, graph,model):
     run_steps(graph, monitor=False, train=False,valid=False)
 
     return model.y_pre.value*std_y + mean_y
-
+graph_sort = toplogical_sort(mlp.feed_dict)
 print("预测值：",predict(x_[17:50],graph_sort,mlp),"真实值：",y_[17:50]*std_y + mean_y)
 

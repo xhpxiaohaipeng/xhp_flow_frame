@@ -1,7 +1,17 @@
 
 import os
 from xhp_flow.nn.node import Placeholder,Linear,Sigmoid,ReLu,Leakrelu,Elu,Tanh,LSTM
-from xhp_flow.optimize.optimize import toplogical_sort,run_steps,optimize,forward,save_model,load_model,Visual_gradient,Grad_Clipping_Disappearance,Auto_update_lr
+from xhp_flow.optimize.optimize import toplogical_sort,run_steps,forward,save_model,load_model,Auto_update_lr,Visual_gradient,Grad_Clipping_Disappearance,SUW,\
+SGD,\
+Momentum,\
+Adagrad,\
+RMSProp,\
+AdaDelta,\
+Adam,\
+AdaMax,\
+Nadam,\
+NadaMax
+
 from xhp_flow.loss.loss import MSE,EntropyCrossLossWithSoftmax
 import matplotlib.pyplot as plt
 
@@ -116,6 +126,7 @@ def train(model,train_data,epoch = 4000,learning_rate = 0.0128):
     accuracies_valid = []
     loss_min = np.inf
     graph_sort_class = toplogical_sort(model.feed_dict)  # 拓扑排序
+    optim = Adam(graph_sort_class)
     update_lr = Auto_update_lr(lr=learning_rate,alpha=0.1, patiences=200, print_=True)
     for e in range(epoch):
         for X,Y in train_data:
@@ -124,9 +135,9 @@ def train(model,train_data,epoch = 4000,learning_rate = 0.0128):
             model.y.value = Y
             run_steps(graph_sort_class)
             learning_rate = update_lr.lr
-            optimize(graph_sort_class,learning_rate=learning_rate)
+            optim.update(learning_rate=learning_rate)
             Visual_gradient(model)
-            Grad_Clipping_Disappearance(model,5)
+            Grad_Clipping_Disappearance(model, 5)
             loss = model.cross_loss.value
             accuracy = model.cross_loss.accuracy
             losses.append(loss)

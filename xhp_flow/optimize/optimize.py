@@ -4,7 +4,9 @@ from xhp_flow.nn.node import  Placeholder
 import os,zipfile
 from glob import glob
 import numpy as np
+
 import shutil
+from _collections import defaultdict
 
 """
 使用拓扑排序找到网络节点的前向计算顺序（反向传播反过来就行）
@@ -138,17 +140,381 @@ def run_steps(graph_topological_sort_order, train=True, valid=True, monitor=Fals
     else:
         forward(graph_topological_sort_order, monitor, valid)
 
+"""
+总共实现了以下10种优化算法
+SUW
+SGD
+Momentum
+AdaGrad
+RMSProp
+AdaDelta 不需要设置学习率
+Adam
+AdaMax
+Nadam
+NadaMax
+"""
 
+class SUW():
 
-class optimize():
-    def __init__(self,graph, learning_rate=1e-2):
+    def __init__(self,graph, ):
+
         self.graph = graph
+
+    def update(self,learning_rate=1e-2):
+
         self.learning_rate = learning_rate
+
         for node in self.graph:
             if node.is_trainable:
                 node.value = node.value.reshape((node.value.shape[0], -1))
                 node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
                 node.value += -1 * node.gradients[node] * self.learning_rate
+class SGD():
+
+    def __init__(self,graph):
+
+        self.graph = graph
+
+        self.r = {}
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self, learning_rate=1e-2):
+
+        self.learning_rate = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = 0
+                """
+                对应权重次数累加
+                """
+                self.weight_count[node] += 1
+
+                """
+                梯度累加
+                """
+                self.r[node] += node.gradients[node]
+
+                """
+                权重更新
+                """
+                node.value += -1 *self.learning_rate * (self.r[node] / self.weight_count[node])
+
+class Momentum():
+
+    def __init__(self,graph,alpha=0.9):
+        """
+        # 动量系数
+        """
+        self.alpha = alpha
+        self.graph = graph
+        self.v = {}
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self,learning_rate=1e-3):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.v[node] = 0
+                """
+                对应权重累加之后不为0即可
+                """
+                self.weight_count[node] = 1
+
+                self.v[node] = self.alpha * self.v[node] - self.lr * node.gradients[node]
+                node.value += self.v[node]
+
+class Adagrad():
+
+    def __init__(self,graph,eps=np.finfo(float).eps):
+
+        self.eps = eps
+        self.graph = graph
+        self.r = {}
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self,learning_rate=1e-3,):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = self.eps
+                """
+                对应权重累加之后不为0即可
+                """
+                self.weight_count[node] = 1
+
+                self.r[node] +=  np.square(node.gradients[node])
+                node.value += - 1 * node.gradients[node] * self.lr / (np.sqrt(self.r[node]))
+
+class RMSProp():
+
+    def __init__(self,graph,beta=0.9,eps=np.finfo(float).eps):
+
+        self.eps = eps
+        self.graph = graph
+        self.beta = beta
+
+        self.r = {}
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self,learning_rate=1e-3):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = self.eps
+
+                """
+                对应权重累加之后不为0即可
+                """
+                self.weight_count[node] = 1
+
+                self.r[node] =  self.r[node] * self.beta + (1-self.beta) * np.square(node.gradients[node])
+                node.value += - 1 * node.gradients[node] * self.lr / (np.sqrt(self.r[node]) + self.eps)
+
+class AdaDelta():
+
+    def __init__(self,graph,beta=0.9,eps=np.finfo(float).eps):
+
+        self.eps = eps
+
+        self.beta = beta
+        self.graph = graph
+
+        self.r = {}
+        self.s = {}
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self):
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = self.eps
+                    self.s[node] = self.eps
+
+                """
+                对应权重累加之后不为0即可
+                """
+                self.weight_count[node] = 1
+
+                g_square = (1 - self.beta) * np.square(node.gradients[node])
+                self.r[node] = self.r[node] * self.beta + g_square
+                frac = self.s[node] / self.r[node]
+                self.s[node] = self.s[node] * self.beta + frac * g_square
+
+                node.value += -np.sqrt(frac) * node.gradients[node]
+
+
+class Adam():
+
+    def __init__(self,graph, alpha=0.9, beta=0.9, eps=np.finfo(float).eps):
+
+        self.eps = eps
+        self.alpha = alpha
+        self.beta = beta
+        self.alpha_i = 1
+        self.beta_i = 1
+        self.graph = graph
+
+        self.r = {}
+        self.s = {}
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+    def update(self,learning_rate=1e-3):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = self.eps
+                    self.s[node] = 0
+
+                self.weight_count[node] = 1
+
+                self.s[node] = self.s[node] * self.alpha + (1 - self.alpha) * node.gradients[node]
+                self.r[node] = self.r[node] * self.beta + (1 - self.beta) * np.square(node.gradients[node])
+
+                self.alpha_i *= self.alpha
+                self.beta_i *= self.beta
+
+                self.s[node] = self.s[node] / (1-self.alpha_i)
+                self.r[node] = self.r[node] / (1-self.beta_i )
+
+                node.value += -1*self.lr*self.s[node] / (np.sqrt(self.r[node])+np.finfo(float).eps)
+
+class  AdaMax():
+
+    def __init__(self,graph, alpha=0.9, beta=0.9):
+
+
+        self.alpha = alpha
+        self.alpha_i = 1
+        self.beta = beta
+
+        self.graph = graph
+
+        self.r = {}
+        self.s = {}
+
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self,learning_rate=1e-3):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = 0
+                    self.s[node] = 0
+
+                self.weight_count[node] = 1
+
+                self.s[node] = self.s[node] * self.alpha + (1 - self.alpha) * node.gradients[node]
+                self.r[node] = np.maximum(self.r[node] * self.beta, np.abs(node.gradients[node]))
+                self.alpha_i *= self.alpha
+                self.s[node] = self.s[node] / (1 - self.alpha_i)
+
+                node.value += -self.s[node] * self.lr / (self.r[node] + np.finfo(float).eps)
+
+class  Nadam():
+
+    def __init__(self,graph, alpha=0.9, beta=0.9, eps=np.finfo(float).eps):
+
+        self.eps = eps
+        self.alpha = alpha
+        self.beta = beta
+        self.alpha_i = 1
+        self.beta_i = 1
+
+        self.graph = graph
+
+        self.r = {}
+        self.s = {}
+
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self,learning_rate=1e-3):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = self.eps
+                    self.s[node] = 0
+
+                self.weight_count[node] = 1
+
+
+                self.s[node] = self.s[node] * self.alpha + (1 - self.alpha) * node.gradients[node]
+                self.r[node] = self.r[node] * self.beta + (1 - self.beta) * np.square(node.gradients[node])
+                self.alpha_i *= self.alpha
+                self.beta_i  *= self.beta
+
+                self.s[node] = self.s[node] / (1 - self.alpha_i)
+                self.r[node] = self.r[node] / (1 - self.beta_i)
+
+                node.value += -self.lr *np.sqrt (1-self.beta_i)* (self.s[node] * self.alpha + (1-self.alpha) \
+                            * node.gradients[node]) / (np.sqrt(self.r[node]) * (1 -self.alpha_i))
+
+class  NadaMax():
+
+    def __init__(self,graph, alpha=0.9, beta=0.9):
+
+        self.alpha = alpha
+        self.alpha_i = 1
+        self.beta = beta
+
+        self.graph = graph
+
+        self.r = {}
+        self.s = {}
+
+        """
+        default value of int is 0
+        """
+        self.weight_count = defaultdict(int)
+
+    def update(self,learning_rate=1e-3):
+
+        self.lr = learning_rate
+
+        for node in self.graph:
+            if node.is_trainable:
+                node.value = node.value.reshape((node.value.shape[0], -1))
+                node.gradients[node] = node.gradients[node].reshape((node.gradients[node].shape[0], -1))
+
+                if self.weight_count[node] == 0:
+                    self.r[node] = 0
+                    self.s[node] = 0
+
+                self.weight_count[node] = 1
+
+                self.s[node] = self.s[node] * self.alpha + (1 - self.alpha) * node.gradients[node]
+                self.r[node] = np.maximum(self.r[node] * self.beta, np.abs(node.gradients[node]))
+                self.alpha_i *= self.alpha
+                self.s[node] = self.s[node] / (1 - self.alpha_i)
+
+                node.value += -self.lr * (self.s[node] * self.alpha + (1-self.alpha) * node.gradients[node]) / (self.r[node] * (1 -self.alpha_i))
 
 
 class Auto_update_lr():

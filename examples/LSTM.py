@@ -3,7 +3,17 @@ from tqdm import tqdm
 from sklearn.utils import shuffle, resample
 import numpy as np
 from xhp_flow.nn.node import Placeholder,Linear,Sigmoid,ReLu,Leakrelu,Elu,Tanh,LSTM
-from xhp_flow.optimize.optimize import toplogical_sort,run_steps,optimize,forward,save_model,load_model
+from xhp_flow.optimize.optimize import toplogical_sort,run_steps,forward,save_model,load_model,Auto_update_lr,Visual_gradient,Grad_Clipping_Disappearance,SUW,\
+SGD,\
+Momentum,\
+Adagrad,\
+RMSProp,\
+AdaDelta,\
+Adam,\
+AdaMax,\
+Nadam,\
+NadaMax
+
 from xhp_flow.loss.loss import MSE,EntropyCrossLossWithSoftmax
 import matplotlib.pyplot as plt
 import torch
@@ -70,12 +80,13 @@ class LSTMtest():
 
 # In[ ]:
 lstm = LSTMtest(16, 16, 1)
-graph_sort_lstm = toplogical_sort(lstm.feed_dict)  # 拓扑排序
-print(graph_sort_lstm)
 def train(model, train_data, epoch=6, learning_rate=1e-3):
     # 开始训练
     losses = []
     loss_min = np.inf
+    graph_sort_lstm = toplogical_sort(model.feed_dict)  # 拓扑排序
+    optim = Adam(graph_sort_lstm)
+    update_lr = Auto_update_lr(lr=learning_rate, alpha=0.1, patiences=20, print_=True)
     for e in range(epoch):
         for X, Y in train_data:
             X, Y = X.numpy(), Y.numpy()
@@ -84,10 +95,13 @@ def train(model, train_data, epoch=6, learning_rate=1e-3):
             run_steps(graph_sort_lstm)
             # if model.y_pre.value is not None:
             # print(model.y_pre.value.shape,Y.shape)
-            optimize(graph_sort_lstm, learning_rate=learning_rate)
+            learning_rate = update_lr.lr
+            optim.update(learning_rate=learning_rate)
+            Visual_gradient(model)
+            Grad_Clipping_Disappearance(model, 5)
             loss = model.MSE_loss.value
             losses.append(loss)
-            # print('loss:',loss)
+        update_lr.updata(np.mean(np.mean(losses)))
         print("epoch:{}/{},loss:{:.6f}".format(e,epoch,np.mean(losses)))
         if np.mean(losses) < loss_min:
             print('loss is {:.6f}, is decreasing!! save moddel'.format(np.mean(losses)))
@@ -99,4 +113,4 @@ def train(model, train_data, epoch=6, learning_rate=1e-3):
     plt.show()
 
 
-train(lstm, Training_generator, 1000)
+train(lstm, Training_generator, 1000,0.01)

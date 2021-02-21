@@ -1,4 +1,5 @@
 import numpy as np
+
 from xhp_flow.nn.node import Node
 
 
@@ -74,7 +75,7 @@ class EntropyCrossLossWithSoftmax(Node):
         eps = np.finfo(float).eps
         """
         #y_[np.arange(batch_size), y]代表选择每一行
-        代表的三个类别里面的正确类别此时的概率,然后所有
+        代表的所有类别里面的正确类别此时的概率,然后所有
         概率的对数值的相反数相加就是交叉熵损失
         """
         return -np.mean(np.log(y_[np.arange(batch_size), y] + eps))

@@ -1,7 +1,17 @@
 
 import os
 from xhp_flow.nn.node import Placeholder,Linear,Sigmoid,ReLu,Leakrelu,Elu,Tanh,LSTM
-from xhp_flow.optimize.optimize import toplogical_sort,run_steps,optimize,forward,save_model,load_model,Auto_update_lr,Grad_Clipping_Disappearance
+from xhp_flow.optimize.optimize import toplogical_sort,run_steps,forward,save_model,load_model,Auto_update_lr,Visual_gradient,Grad_Clipping_Disappearance,SUW,\
+SGD,\
+Momentum,\
+Adagrad,\
+RMSProp,\
+AdaDelta,\
+Adam,\
+AdaMax,\
+Nadam,\
+NadaMax
+
 from xhp_flow.loss.loss import MSE,EntropyCrossLossWithSoftmax
 import matplotlib.pyplot as plt
 
@@ -38,8 +48,9 @@ with open('data1/test.json', 'r') as f:
         Y_test[i] = labeltoint(Y_test[i])
 
 split_frac = 0.8
-X_train, Y_train, X_test, Y_test = np.array(X_train).astype(np.float32), np.array(Y_train).astype(np.long), np.array(
+X_train, Y_train, X_test, Y_test = np.array(X_train).astype(np.float32), np.array(Y_train).astype(np.long), np.array(  \
     X_test).astype(np.float32), np.array(Y_test).astype(np.long)
+
 ## split data into training, validation, and test data (features and labels, x and y)
 val_x, test_x = X_test[:len(X_test) // 2], X_test[len(X_test) // 2:]
 val_y, test_y = Y_test[:len(Y_test) // 2], Y_test[len(Y_test) // 2:]
@@ -48,7 +59,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 
 # create Tensor datasets
-train_data = TensorDataset(torch.from_numpy((X_train)), torch.from_numpy(Y_train))
+train_data = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(Y_train))
 valid_data = TensorDataset(torch.from_numpy(val_x), torch.from_numpy(val_y))
 test_data = TensorDataset(torch.from_numpy(test_x), torch.from_numpy(test_y))
 
@@ -108,13 +119,17 @@ def train(model, train_data, epoch=4000, learning_rate=0.00128):
     accuracies_valid = []
     loss_min = np.inf
     graph_sort_class = toplogical_sort(model.feed_dict)  # 拓扑排序
+    optim = Adam(graph_sort_class)
+    update_lr = Auto_update_lr(lr=learning_rate, alpha=0.1, patiences=500, print_=True)
     for e in range(epoch):
         for X, Y in train_data:
             X, Y = X.numpy(), Y.numpy()
             model.x.value = X
             model.y.value = Y
             run_steps(graph_sort_class)
-            optimize(graph_sort_class, learning_rate=learning_rate)
+            optim.update(learning_rate=learning_rate)
+            Visual_gradient(model)
+            Grad_Clipping_Disappearance(model, 5)
             loss = model.cross_loss.value
             accuracy = model.cross_loss.accuracy
             losses.append(loss)
@@ -128,6 +143,7 @@ def train(model, train_data, epoch=4000, learning_rate=0.00128):
             accuracy_valid = model.cross_loss.accuracy
             losses_valid.append(loss_valid)
             accuracies_valid.append(accuracy_valid)
+        update_lr.updata(np.mean(losses_valid))
         print("epoch:{}/{},train loss:{:.8f},train accuracy:{:.8f},valid loss:"\
             "{:.8f},valid accuracy:{:.8f}".format(e,epoch,np.mean(losses),
         np.mean(accuracies), np.mean(losses_valid),np.mean(accuracies_valid)))
@@ -136,7 +152,11 @@ def train(model, train_data, epoch=4000, learning_rate=0.00128):
             save_model("model/mlp_class.xhp", model)
             loss_min = np.mean(losses_valid)
 
-    plt.plot(losses)
+  #  plt.plot(losses_valid,label='valid loss')
+   # plt.plot(losses,label='train loss')
+    plt.plot(accuracies,label='train accuracy')
+    plt.plot(accuracies_valid,label='valid accuracy')
+    plt.legend()
     plt.savefig("image/mlp_class_loss.png")
     plt.show()
 
@@ -166,8 +186,8 @@ def evaluator(test_loader,model):
         accuracies.append(accuracy_test)
     print("test loss:{},test accuracy:{}".format(np.mean(losses),np.mean(accuracies)))
 
-load_model('model/mlp_class.xhp',mlp_class)
-train(mlp_class, train_loader, 50000)
+#load_model('model/mlp_class.xhp',mlp_class)
+train(mlp_class, train_loader, 2500,0.001)
 x1,y = next(iter(train_loader))
 input_x,y = x1.numpy(),y.numpy()
 load_model('model/mlp_class.xhp',mlp_class)
